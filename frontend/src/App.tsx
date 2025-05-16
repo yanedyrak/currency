@@ -1,88 +1,209 @@
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
+
+const API_URL = "http://localhost:5001/api";
 
 function App() {
-  const [amount, setAmount] = useState(100);
+  const [rates, setRates] = useState({});
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("EUR");
-  const [value, setValue] = useState(100);
+  const [amount, setAmount] = useState(1);
+  const [result, setResult] = useState(null);
+  const [newCurrency, setNewCurrency] = useState("");
+  const [newRate, setNewRate] = useState("");
+  const [message, setMessage] = useState("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAmount(Number(e.target.value));
-  };
+  useEffect(() => {
+    setResult(null);
+  }, [amount]);
 
-  const handleFromCurrencyChange = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    setFromCurrency(e.target.value);
-  };
+  useEffect(() => {
+    fetchRates();
+  }, []);
 
-  const handleToCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setToCurrency(e.target.value);
-  };
-
-  const convert = async () => {
+  const fetchRates = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:5001/api/convert?amount=${amount}&from=${fromCurrency}&to=${toCurrency}`
-      );
-      const data = await response.json();
-      setValue(data.result);
-    } catch (error) {
-      console.error(error);
+      const res = await fetch(`${API_URL}/rates`);
+      const data = await res.json();
+      setRates(data);
+    } catch (err) {
+      console.error("Ошибка загрузки курсов:", err);
     }
   };
 
-  useEffect(() => {
-    convert();
-  }, [amount, fromCurrency, toCurrency]);
+  const handleConvert = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/conversions?from=${fromCurrency}&to=${toCurrency}&amount=${amount}`
+      );
+      const data = await res.json();
+      setResult(data.result);
+    } catch (err) {
+      console.error("Ошибка конвертации:", err);
+    }
+  };
+
+  const handleAddRate = async () => {
+    try {
+      const res = await fetch(`${API_URL}/rates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currency: newCurrency, price: Number(newRate) }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(`Ошибка: ${data.error}`);
+      } else {
+        setMessage(data.message);
+        setNewCurrency("");
+        setNewRate("");
+        fetchRates();
+      }
+    } catch (err) {
+      setMessage("Ошибка добавления валюты");
+    }
+  };
+
+  const handleUpdateRate = async () => {
+    try {
+      const res = await fetch(`${API_URL}/rates/${newCurrency}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price: Number(newRate) }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(`Ошибка: ${data.error}`);
+      } else {
+        setMessage(data.message);
+        fetchRates();
+      }
+    } catch (err) {
+      setMessage("Ошибка обновления курса");
+    }
+  };
+
+  const handleDeleteRate = async () => {
+    try {
+      const res = await fetch(`${API_URL}/rates/${newCurrency}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(`Ошибка: ${data.error}`);
+      } else {
+        setMessage(data.message);
+        fetchRates();
+      }
+    } catch (err) {
+      setMessage("Ошибка удаления курса");
+    }
+  };
 
   return (
-    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100 p-6">
-      <div className="bg-white p-10 rounded-2xl shadow-2xl flex flex-col gap-10 text-3xl items-center w-full max-w-md">
-        <h1>Конвертор валюты</h1>
-        {/* Input Row */}
-        <div className="flex gap-4 w-full items-center">
-          <div className="flex w-full max-w-xs">
-            <input
-              type="text"
-              maxLength={10}
-              value={amount}
-              onChange={handleChange}
-              className="w-full text-right px-4 py-2 text-2xl border border-black rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
-            />
-          </div>
+    <div className="min-h-screen bg-gray-50 text-gray-800 p-6">
+      <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-2xl p-8">
+        <h1 className="text-2xl font-bold mb-6 text-center text-blue-600">
+          💱 Конвертер валют
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <input
+            type="number"
+            className="flex-1 p-2 border rounded-md"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
           <select
+            className="p-2 border rounded-md"
             value={fromCurrency}
-            onChange={handleFromCurrencyChange}
-            className="px-4 py-2 bg-blue-200 text-xl rounded-xl cursor-pointer focus:outline-none hover:bg-blue-300"
+            onChange={(e) => setFromCurrency(e.target.value)}
           >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="JPY">JPY</option>
+            {Object.keys(rates).map((key) => (
+              <option key={key}>{key}</option>
+            ))}
           </select>
-        </div>
 
-        <p className="text-4xl">=</p>
+          <span className="text-xl">→</span>
 
-        {/* Output Row */}
-        <div className="flex gap-4 w-full items-center">
-          <div className="flex w-full max-w-xs">
-            <p className="w-full px-4 py-2 bg-gray-100 text-2xl rounded-xl text-right">
-              {value}
-            </p>
-          </div>
           <select
+            className="p-2 border rounded-md"
             value={toCurrency}
-            onChange={handleToCurrencyChange}
-            className="px-4 py-2 bg-purple-200 text-xl rounded-xl cursor-pointer focus:outline-none hover:bg-purple-300"
+            onChange={(e) => {
+              setToCurrency(e.target.value);
+              setResult(null);
+            }}
           >
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="JPY">JPY</option>
+            {Object.keys(rates).map((key) => (
+              <option key={key}>{key}</option>
+            ))}
           </select>
+
+          <button
+            onClick={handleConvert}
+            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+          >
+            Конвертировать
+          </button>
         </div>
+
+        {result && (
+          <p className="text-lg font-medium mb-6 text-green-600">
+            💰 Результат: {amount} {fromCurrency} = {result} {toCurrency}
+          </p>
+        )}
+
+        <h2 className="text-xl font-semibold mb-2">Управление курсами</h2>
+        <div className="flex flex-wrap gap-3 mb-4">
+          <input
+            type="text"
+            placeholder="Код (например, RUB)"
+            className="flex-1 p-2 border rounded-md"
+            value={newCurrency}
+            onChange={(e) => setNewCurrency(e.target.value.toUpperCase())}
+          />
+          <input
+            type="number"
+            placeholder="Курс"
+            className="flex-1 p-2 border rounded-md"
+            value={newRate}
+            onChange={(e) => setNewRate(e.target.value)}
+          />
+          <button
+            onClick={handleAddRate}
+            className="bg-green-500 text-white px-3 py-2 rounded-md hover:bg-green-600"
+          >
+            Добавить
+          </button>
+          <button
+            onClick={handleUpdateRate}
+            className="bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600"
+          >
+            Обновить
+          </button>
+          <button
+            onClick={handleDeleteRate}
+            className="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600"
+          >
+            Удалить
+          </button>
+        </div>
+        {message && <p className="text-sm text-purple-600">{message}</p>}
+
+        <h2 className="text-xl font-semibold mt-6 mb-2">📊 Курсы валют</h2>
+        <ul className="grid grid-cols-2 gap-2 text-sm">
+          {Object.entries(rates).map(([currency, price]) => (
+            <li
+              key={currency}
+              className="bg-gray-100 p-2 rounded-md flex justify-between"
+            >
+              <span>{currency}</span>
+              <span>{price}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
